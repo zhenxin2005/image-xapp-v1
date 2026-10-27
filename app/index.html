@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生图</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --border: #262b36;
+    --text: #e6e9ef;
+    --muted: #8b93a7;
+    --accent: #4f8cff;
+    --ok: #34d399;
+    --err: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  h1 { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  h1 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  h1 .dot.online { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  h1 .dot.offline { background: var(--err); box-shadow: 0 0 8px var(--err); }
+  .status-badge {
+    font-size: 12px; padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .status-badge.online { color: var(--ok); border-color: rgba(52,211,153,.4); }
+  .status-badge.offline { color: var(--err); border-color: rgba(248,113,113,.4); }
+  .banner {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 16px; font-size: 13px; color: var(--muted);
+  }
+  .banner code {
+    background: rgba(255,255,255,.06); padding: 2px 8px; border-radius: 6px;
+    font-family: "Cascadia Code", Consolas, monospace; color: var(--text);
+  }
+  .form-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  textarea, select {
+    width: 100%; background: rgba(255,255,255,.05); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 13px; padding: 10px 12px;
+    font-family: inherit; outline: none;
+  }
+  textarea { min-height: 88px; resize: vertical; }
+  select:focus, textarea:focus { border-color: var(--accent); }
+  /* 原生下拉展开面板：蓝字 + 深底，避免白底白字不可见 */
+  select option {
+    color: var(--accent);
+    background: var(--card);
+  }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  .toolbar { display: flex; gap: 12px; margin: 4px 0 16px; align-items: center; }
+  button {
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 11px 26px; font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+  }
+  button.ghost:hover { color: var(--text); border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden;
+  }
+  .loading { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+  .error-box { text-align: center; padding: 40px; color: var(--err); font-size: 14px; }
+  .spinner {
+    width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.2);
+    border-top-color: #fff; border-radius: 50%; display: inline-block;
+    vertical-align: -4px; margin-right: 8px; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .result { padding: 16px; text-align: center; }
+  .result img {
+    max-width: 100%; max-height: 480px; border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .meta { margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .meta code { background: rgba(255,255,255,.06); padding: 1px 6px; border-radius: 4px; }
+  .upload-zone {
+    border: 1px dashed var(--border); border-radius: 10px; padding: 12px;
+    text-align: center; color: var(--muted); font-size: 13px; cursor: pointer;
+    transition: border-color .15s;
+  }
+  .upload-zone:hover { border-color: var(--accent); color: var(--text); }
+  .upload-zone input[type=file] { display: none; }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .thumb { position: relative; width: 64px; height: 64px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .num {
+    position: absolute; top: 2px; left: 2px; padding: 0 4px; line-height: 15px;
+    border-radius: 4px; background: rgba(0,0,0,.65); color: #fff; font-size: 11px; z-index: 1;
+  }
+  .thumb .rm {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; line-height: 16px;
+    text-align: center; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff;
+    font-size: 12px; cursor: pointer; border: none;
+  }
+  /* ===== 结果区增强（借鉴独立面板）===== */
+  .result-actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
+  .result-actions button { padding: 8px 18px; font-size: 13px; }
+  .hist-label { margin-top: 18px; text-align: left; font-size: 12px; color: var(--muted); }
+  .hist { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .hist img {
+    width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
+    border: 1px solid var(--border); cursor: pointer; opacity: .85;
+  }
+  .hist img:hover { opacity: 1; border-color: var(--accent); }
+  .hist img.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); opacity: 1; }
+  .diag {
+    display: none; margin-top: 14px; background: #2a2118; border: 1px solid #4a3a20;
+    color: #ffd9a0; border-radius: 8px; padding: 10px 12px;
+    font: 12px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+  }
+  /* ===== 图片查看器：点击大图 → 滚轮缩放 ===== */
+  .result img { cursor: zoom-in; }
+  .lightbox {
+    position: fixed; inset: 0; z-index: 999; display: none;
+    align-items: center; justify-content: center;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox-bg { position: absolute; inset: 0; background: rgba(0,0,0,.85); }
+  .lightbox img {
+    position: relative; z-index: 1; max-width: 92vw; max-height: 92vh;
+    cursor: grab; user-select: none; -webkit-user-drag: none; transform-origin: center; will-change: transform;
+  }
+  .lightbox img.dragging { cursor: grabbing; }
+  .lightbox-close {
+    position: absolute; top: 16px; right: 20px; z-index: 2;
+    background: rgba(255,255,255,.12); border: none; color: #fff;
+    font-size: 26px; width: 40px; height: 40px; border-radius: 50%;
+    cursor: pointer; line-height: 1; transition: background .15s;
+  }
+  .lightbox-close:hover { background: rgba(255,255,255,.25); }
+  .lightbox-hint {
+    position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+    z-index: 2; color: rgba(255,255,255,.75); font-size: 12px;
+    background: rgba(0,0,0,.5); padding: 6px 14px; border-radius: 999px; white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="dot" id="dot"></span>生图</h1>
+    <span class="status-badge" id="badge">检测中…</span>
+  </header>
+
+  <div class="banner" id="banner" style="display:none;">
+    <span id="bannerText">桥接服务离线。</span>
+  </div>
+
+  <div class="form-card">
+    <div class="field">
+      <label>画面描述（Prompt）</label>
+      <textarea id="prompt" placeholder="描述你想生成的画面，如：a red apple on a white table, soft light"></textarea>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>模型</label>
+        <select id="model">
+          <option value="standard">standard（grok-imagine-image）</option>
+          <option value="v2">v2（grok-imagine-image-2.0）</option>
+          <option value="quality">quality（grok-imagine-image-quality）</option>
+          <option value="eliroot">eliroot（eliroot-image-2.1）</option>
+          <option value="eliroot-turbo">eliroot-turbo（快速版）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label id="resLabel">分辨率</label>
+        <select id="resolution">
+          <option value="1k">1K</option>
+          <option value="1.5k">1.5K（仅 v2）</option>
+          <option value="2k">2K</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>宽高比</label>
+        <select id="ratio">
+          <option value="1:1">1:1</option>
+          <option value="16:9">16:9</option>
+          <option value="9:16">9:16</option>
+          <option value="4:3">4:3</option>
+          <option value="3:4">3:4</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" id="imgEditField" style="display:none;">
+      <label>参考图（Eliroot 图生图/改图，可选 1-4 张）</label>
+      <div class="upload-zone" id="uploadZone">点击选择参考图（PNG/JPEG/WebP，每张 ≤10MiB）</div>
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button id="btn">生成图片</button>
+    <button id="btnFolder" class="ghost">打开图片文件夹</button>
+    <span class="hint" id="hint">点击后同步等待，约需 30s~3min（quality 更久）</span>
+  </div>
+
+  <div class="card" id="card">
+    <div class="loading" id="loading">填好描述，点击「生成图片」</div>
+  </div>
+
+  <div class="diag" id="diag"></div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-bg" id="lightboxBg"></div>
+  <img id="lightboxImg" alt="预览" draggable="false">
+  <button class="lightbox-close" id="lightboxClose" title="关闭">×</button>
+  <div class="lightbox-hint">滚轮缩放 · 拖拽平移 · 双击复位 · 点击空白 / ESC 关闭</div>
+</div>
+
+<script>
+const CANDIDATE_PORTS = [8788, 8789, 8790, 8791, 8792]; // 与服务端自动避让范围一致
+let API = null; // 探测成功后指向在线端口
+
+const dot = document.getElementById('dot');
+const badge = document.getElementById('badge');
+const banner = document.getElementById('banner');
+const bannerText = document.getElementById('bannerText');
+const btn = document.getElementById('btn');
+const btnFolder = document.getElementById('btnFolder');
+const card = document.getElementById('card');
+const hint = document.getElementById('hint');
+
+const ELIROOT = ['eliroot', 'eliroot-turbo'];
+const modelSel = document.getElementById('model');
+const resSel = document.getElementById('resolution');
+const resLabel = document.getElementById('resLabel');
+const imgEditField = document.getElementById('imgEditField');
+const uploadZone = document.getElementById('uploadZone');
+const thumbs = document.getElementById('thumbs');
+const fileInput = document.createElement('input');
+fileInput.type = 'file';
+fileInput.accept = 'image/png,image/jpeg,image/webp';
+fileInput.multiple = true;
+let refImages = []; // { data: dataURI, name }
+
+// ===== 结果区增强（借鉴独立面板 image-console.html）=====
+let lastResult = null; // { b64, mime, model, size, elapsed, outputPath }
+let hist = [];         // 本次会话历史（最多 8 条）
+let genStart = 0;
+
+// 全局错误兜底：任何未捕获错误都显示到诊断区，不再静默失败
+window.addEventListener('error', e => {
+  const box = document.getElementById('diag');
+  if (box) { box.style.display = 'block'; box.textContent = '脚本错误：' + (e.message || e.type) + ' @ ' + (e.filename || '') + ' :' + (e.lineno || ''); }
+});
+window.addEventListener('unhandledrejection', e => {
+  const box = document.getElementById('diag');
+  const m = (e.reason && (e.reason.message || String(e.reason))) || 'unknown';
+  if (box) { box.style.display = 'block'; box.textContent = '异步错误：' + m; }
+});
+
+// 模型切换：Eliroot 显示参考图区 + 禁用分辨率；GROK 反之
+modelSel.addEventListener('change', () => {
+  const isEli = ELIROOT.includes(modelSel.value);
+  imgEditField.style.display = isEli ? 'block' : 'none';
+  resSel.disabled = isEli;
+  resLabel.textContent = isEli ? '尺寸（由宽高比映射）' : '分辨率';
+  hint.textContent = isEli
+    ? 'Eliroot 同步等待：turbo 约 1min，原版约 3min'
+    : '点击后同步等待，约需 30s~3min（quality 更久）';
+});
+
+uploadZone.addEventListener('click', () => fileInput.click());
+
+// ===== 拖拽参考图：从对话窗口预览图 / 文件管理器拖图片进面板（跨沙箱已验证可行）=====
+uploadZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  uploadZone.style.borderColor = '#ffd700';
+});
+uploadZone.addEventListener('dragleave', () => {
+  uploadZone.style.borderColor = '';
+});
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.style.borderColor = '';
+  const dt = e.dataTransfer;
+  // 通道1：File 对象（宿主实测携带真实文件）
+  const imgs = Array.from(dt.files || []).filter(f => f.type.startsWith('image/'));
+  if (imgs.length) {
+    const room = 4 - refImages.length;
+    if (room <= 0) { hint.textContent = '参考图已达上限 4 张，请先移除再拖入'; return; }
+    for (const f of imgs.slice(0, room)) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        refImages.push({ data: reader.result, name: f.name });
+        renderThumbs();
+      };
+      reader.readAsDataURL(f);
+    }
+    hint.textContent = `已拖入 ${Math.min(imgs.length, room)} 张参考图（共 ${Math.min(refImages.length + imgs.length, 4)}/4）`;
+    return;
+  }
+  // 通道2：data URI 兜底（uri-list 里是 data:image/...）
+  let uriList = '';
+  try { uriList = dt.getData('text/uri-list') || ''; } catch (_) {}
+  if (uriList.startsWith('data:image/')) {
+    const room = 4 - refImages.length;
+    if (room <= 0) { hint.textContent = '参考图已达上限 4 张，请先移除再拖入'; return; }
+    refImages.push({ data: uriList, name: '拖入图片' });
+    renderThumbs();
+    hint.textContent = `已拖入 1 张参考图（共 ${refImages.length}/4）`;
+    return;
+  }
+  hint.textContent = '未识别到图片数据，请拖入图片文件';
+});
+
+fileInput.addEventListener('change', () => {
+  const files = Array.from(fileInput.files || []).slice(0, 4 - refImages.length);
+  for (const f of files) {
+    if (f.size > 10 * 1024 * 1024) { card.innerHTML = `<div class="error-box">参考图 ${f.name} 超过 10MiB 上限。</div>`; continue; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      refImages.push({ data: reader.result, name: f.name });
+      renderThumbs();
+    };
+    reader.readAsDataURL(f);
+  }
+  fileInput.value = '';
+});
+function renderThumbs() {
+  thumbs.innerHTML = '';
+  refImages.forEach((img, i) => {
+    const d = document.createElement('div');
+    d.className = 'thumb';
+    d.innerHTML = `<img src="${img.data}" alt="ref${i + 1}"><span class="num">图${i + 1}</span><button class="rm" title="移除">×</button>`;
+    d.querySelector('.rm').addEventListener('click', () => {
+      refImages.splice(i, 1);
+      renderThumbs();
+    });
+    thumbs.appendChild(d);
+  });
+}
+
+async function probe() {
+  for (const p of CANDIDATE_PORTS) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2000);
+      const r = await fetch(`http://127.0.0.1:${p}/health`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (r.ok) {
+        setOnline(p);
+        return;
+      }
+    } catch (e) { /* 尝试下一个端口 */ }
+  }
+  setOffline('正在自动启动桥接服务（已请求 Agent 拉起）…');
+  autoStart();
+}
+
+function setOnline(p) {
+  API = `http://127.0.0.1:${p}`;
+  dot.className = 'dot online';
+  badge.textContent = `服务在线 :${p}`;
+  badge.className = 'status-badge online';
+  banner.style.display = 'none';
+  btn.disabled = false;
+  startHeartbeat(p);
+}
+
+function setOffline(msg) {
+  API = null;
+  dot.className = 'dot offline';
+  badge.textContent = '服务离线';
+  badge.className = 'status-badge offline';
+  banner.style.display = 'block';
+  bannerText.textContent = msg || '桥接服务离线。';
+  btn.disabled = true;
+  stopHeartbeat();
+}
+
+// 面板保活：窗口打开期间每 15s 发心跳；窗口关闭 → 心跳停 → 服务 60s 内自动退出
+let heartbeatTimer = null;
+function startHeartbeat(port) {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    fetch(`http://127.0.0.1:${port}/heartbeat`)
+      .catch(() => {
+        // 服务异常退出：回到离线并尝试重新拉起
+        setOffline('服务已退出，正在重新启动…');
+        autoStart();
+      });
+  }, 15000);
+}
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+// 自动拉起：通过宿主 SDK 发任务卡片 → 会话 Agent 启动本地桥接服务 → 轮询直到在线
+let starting = false;
+async function autoStart() {
+  if (starting) return;
+  starting = true;
+  try {
+    if (window.xu && typeof window.xu.createTask === 'function') {
+      await window.xu.createTask({
+        title: '启动生图桥接服务',
+        description: '面板检测到本地桥接服务离线，自动请求拉起。',
+        instruction: '请启动本技能（image-xapp-v1）自带的生图桥接服务：在技能安装目录的 engine 子目录运行 `node grok_image.mjs --serve`（服务监听 127.0.0.1:8788，被占自动避让 8789-8792；心跳驱动：无心跳 60s 自动退出）。启动成功后确认 /health 返回 ok。',
+      });
+    }
+    // 轮询等待服务上线（最多 60s）
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 2000));
+      const p = await probeOnce();
+      if (p) {
+        setOnline(p);
+        card.innerHTML = '<div class="loading">桥接服务已自动启动，可以生成图片了。</div>';
+        starting = false;
+        return;
+      }
+    }
+    setOffline('自动启动超时。请在技能安装目录的 engine 子目录手动运行 node grok_image.mjs --serve。');
+  } catch (e) {
+    setOffline('自动启动失败：' + (e.message || e));
+  }
+  starting = false;
+}
+
+async function probeOnce() {
+  for (const p of CANDIDATE_PORTS) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 2000);
+      const r = await fetch(`http://127.0.0.1:${p}/health`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (r.ok) return p;
+    } catch (e) { /* 尝试下一个端口 */ }
+  }
+  return null;
+}
+
+// 窗口关闭：尽力通知服务立即退出（心跳超时兜底）
+window.addEventListener('beforeunload', () => {
+  stopHeartbeat();
+  if (API) {
+    try { fetch(API + '/shutdown', { keepalive: true }).catch(() => {}); } catch (e) { /* 忽略 */ }
+  }
+});
+
+btnFolder.addEventListener('click', async () => {
+  if (!API) return;
+  btnFolder.disabled = true;
+  try {
+    const r = await fetch(API + '/open-folder');
+    const d = await r.json();
+    if (d.status === 'success') {
+      card.innerHTML = `<div class="loading">已打开图片文件夹：<code style="background:rgba(255,255,255,.06);padding:2px 8px;border-radius:6px;color:var(--text)">${d.folder}</code></div>`;
+    } else {
+      card.innerHTML = `<div class="error-box">打开失败：${d.message || '未知错误'}</div>`;
+    }
+  } catch (e) {
+    card.innerHTML = '<div class="error-box">请求失败，桥接服务可能已退出。</div>';
+    probe();
+  } finally {
+    btnFolder.disabled = false;
+  }
+});
+
+btn.addEventListener('click', async () => {
+  const prompt = document.getElementById('prompt').value.trim();
+  if (!prompt) {
+    card.innerHTML = '<div class="error-box">请先填写画面描述（Prompt）。</div>';
+    return;
+  }
+  const model = document.getElementById('model').value;
+  const resolution = document.getElementById('resolution').value;
+  const ratio = document.getElementById('ratio').value;
+  const isEli = ELIROOT.includes(model);
+
+  btn.disabled = true;
+  genStart = Date.now();
+  hint.textContent = '正在生成，请稍候（生成过程中请不要关闭本页）…';
+  card.innerHTML = '<div class="loading"><span class="spinner"></span>正在生成图片…</div>';
+  try {
+    const payload = { prompt, model, ratio };
+    if (isEli) {
+      payload.images = refImages.map(r => r.data);
+    } else {
+      payload.resolution = resolution;
+    }
+    const r = await fetch(API + '/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json();
+    if (data.status === 'success') {
+      // Eliroot 返回 PNG，GROK 返回 JPEG
+      const mime = isEli ? 'image/png' : 'image/jpeg';
+      showResult(data, mime);
+    } else {
+      card.innerHTML = `<div class="error-box">生成失败：${data.message || '未知错误'}</div>`;
+    }
+  } catch (e) {
+    card.innerHTML = '<div class="error-box">请求失败，桥接服务可能已退出。</div>';
+    probe();
+  } finally {
+    btn.disabled = false;
+    hint.textContent = isEli
+      ? 'Eliroot 同步等待：turbo 约 1min，原版约 3min'
+      : '点击后同步等待，约需 30s~3min（quality 更久）';
+  }
+});
+
+// ===== 结果展示：大图 + meta + 下载 + 历史缩略图 =====
+function showResult(data, mime) {
+  const elapsed = ((Date.now() - genStart) / 1000).toFixed(1);
+  lastResult = { b64: data.b64, mime, model: data.model, size: data.size, elapsed, outputPath: data.outputPath };
+  hist.unshift(lastResult);
+  if (hist.length > 8) hist.pop();
+
+  card.innerHTML = `
+    <div class="result">
+      <img id="resultImg" src="data:${mime};base64,${data.b64}" alt="generated">
+      <div class="meta">
+        模型 <code>${data.model}</code> · 模式 <code>${data.mode}</code> · ${data.size ? `尺寸 <code>${data.size}</code> · ` : ''}大小 <code>${(data.fileSize / 1024).toFixed(0)} KB</code> · 耗时 <code>${elapsed}s</code><br>
+        已同时保存到本地：<code>${data.outputPath}</code>
+      </div>
+      <div class="result-actions">
+        <button id="btnDl" class="ghost">下载图片</button>
+      </div>
+      ${renderHist()}
+    </div>`;
+
+  document.getElementById('btnDl').addEventListener('click', () => downloadResult(lastResult));
+  document.getElementById('resultImg').addEventListener('click', () => openViewer(document.getElementById('resultImg').src));
+  document.querySelectorAll('.hist img').forEach(img => {
+    img.addEventListener('click', () => showHistImage(parseInt(img.dataset.i, 10)));
+  });
+}
+
+function renderHist() {
+  if (!hist.length) return '';
+  return `<div class="hist-label">本次会话历史（点击回看）</div><div class="hist">${hist.map((h, i) =>
+    `<img src="data:${h.mime};base64,${h.b64}" data-i="${i}" class="${i === 0 ? 'active' : ''}" title="${h.model}">`).join('')}</div>`;
+}
+
+function showHistImage(i) {
+  const h = hist[i];
+  if (!h) return;
+  const img = document.getElementById('resultImg');
+  if (img) img.src = 'data:' + h.mime + ';base64,' + h.b64;
+  document.querySelectorAll('.hist img').forEach(el =>
+    el.classList.toggle('active', parseInt(el.dataset.i, 10) === i));
+}
+
+function downloadResult(r) {
+  try {
+    const bin = atob(r.b64);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    const blob = new Blob([u8], { type: r.mime });
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ext = r.mime === 'image/png' ? 'png' : 'jpg';
+    a.href = u;
+    a.download = (r.model || 'image') + '_' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.' + ext;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(u), 2000);
+  } catch (e) {
+    card.innerHTML = `<div class="error-box">下载失败：${e.message}</div>`;
+  }
+}
+
+// ===== 图片查看器：点击大图打开，滚轮缩放，拖拽平移 =====
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+const lightboxClose = document.getElementById('lightboxClose');
+const lightboxBg = document.getElementById('lightboxBg');
+let lbScale = 1, lbX = 0, lbY = 0, lbDrag = null;
+
+function openViewer(src) {
+  lightboxImg.src = src;
+  lbScale = 1; lbX = 0; lbY = 0;
+  applyViewer();
+  lightbox.classList.add('open');
+}
+function closeViewer() { lightbox.classList.remove('open'); }
+function applyViewer() {
+  lightboxImg.style.transform = `translate(${lbX}px, ${lbY}px) scale(${lbScale})`;
+}
+
+lightboxImg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  lbScale = Math.min(8, Math.max(0.2, lbScale * factor));
+  applyViewer();
+}, { passive: false });
+
+lightboxImg.addEventListener('pointerdown', e => {
+  e.preventDefault(); // 阻止原生图片拖拽
+  lbDrag = { x: e.clientX - lbX, y: e.clientY - lbY };
+  lightboxImg.classList.add('dragging');
+  if (lightboxImg.setPointerCapture) {
+    try { lightboxImg.setPointerCapture(e.pointerId); } catch (_) {}
+  }
+});
+// 移动/松开事件绑到 document 级：不依赖 pointer capture，指针移出图片也能继续拖
+document.addEventListener('pointermove', e => {
+  if (!lbDrag) return;
+  lbX = e.clientX - lbDrag.x;
+  lbY = e.clientY - lbDrag.y;
+  applyViewer();
+});
+document.addEventListener('pointerup', () => {
+  if (!lbDrag) return;
+  lbDrag = null;
+  lightboxImg.classList.remove('dragging');
+});
+document.addEventListener('pointercancel', () => {
+  if (!lbDrag) return;
+  lbDrag = null;
+  lightboxImg.classList.remove('dragging');
+});
+lightboxImg.addEventListener('dblclick', () => {
+  lbScale = 1; lbX = 0; lbY = 0;
+  applyViewer();
+});
+lightboxClose.addEventListener('click', closeViewer);
+lightboxBg.addEventListener('click', closeViewer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeViewer(); });
+
+probe();
+</script>
+</body>
+</html>
