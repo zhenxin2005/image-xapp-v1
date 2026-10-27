@@ -1,0 +1,15 @@
+{
+  "v": 2,
+  "title": { "zh": "生图", "en": "Image" },
+  "icon": "image",
+  "surface": "web",
+  "entry": "index.html",
+  "permissions": ["task.create"],
+  "net": [
+    "http://127.0.0.1:8788",
+    "http://127.0.0.1:8789",
+    "http://127.0.0.1:8790",
+    "http://127.0.0.1:8791",
+    "http://127.0.0.1:8792"
+  ]
+}
